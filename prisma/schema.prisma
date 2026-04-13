@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── NextAuth.js Models ───────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── App Models ──────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  trainingPlans TrainingPlan[]
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+}
+
+enum TrainingPhase {
+  BASE
+  BUILD
+  PEAK
+  TAPER
+}
+
+enum WorkoutType {
+  EASY_RUN
+  LONG_RUN
+  TEMPO_RUN
+  INTERVAL_RUN
+  REST_DAY
+}
+
+enum WorkoutStatus {
+  PENDING
+  COMPLETED
+  SKIPPED
+  RESCHEDULED
+}
+
+model TrainingPlan {
+  id               String          @id @default(cuid())
+  userId           String
+  name             String
+  goalDistance     String          @default("HALF_MARATHON")
+  goalTimeMinutes  Int?            // target finish time in minutes
+  startDate        DateTime
+  endDate          DateTime
+  currentWeeklyKm  Float           // user's current weekly mileage in km
+  experience       ExperienceLevel
+  trainingDaysPerWeek Int          @default(4)
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  user  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeks Week[]
+}
+
+model Week {
+  id             String        @id @default(cuid())
+  trainingPlanId String
+  weekNumber     Int           // 1-12
+  phase          TrainingPhase
+  totalKm        Float
+  isCutbackWeek  Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+
+  plan     TrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  workouts Workout[]
+
+  @@unique([trainingPlanId, weekNumber])
+}
+
+model Workout {
+  id          String        @id @default(cuid())
+  weekId      String
+  date        DateTime
+  type        WorkoutType
+  distanceKm  Float
+  paceMinPerKm Float?       // minutes per km
+  description String        @db.Text
+  notes       String?       @db.Text
+  status      WorkoutStatus @default(PENDING)
+  dayOfWeek   Int           // 0=Sun, 1=Mon, ... 6=Sat
+  rescheduledFrom DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
+}
